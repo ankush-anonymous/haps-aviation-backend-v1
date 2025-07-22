@@ -15,6 +15,19 @@ const meetingController = {
     }
   },
 
+  getMeetings: async (req, res) => {
+    try {
+      const { mentorId, menteeId } = req.query;
+
+      const meetings = await meetingRepository.findMeetings({ mentorId, menteeId });
+
+      return res.status(200).json({ success: true, data: meetings });
+    } catch (error) {
+       console.error("controller failed: getMeeting", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
+
   getAllMeetings: async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;

@@ -14,6 +14,7 @@ app.use(cors());
   const menteeRoutes = require("./routers/menteeRoutes");
   const meetingRoutes = require("./routers/meetingRoutes");
   const adminRoutes = require("./routers/adminRoutes");
+  const googleMeetRoutes = require("./routers/googleMeetRoutes");
 
 
 // test-GET route
@@ -26,6 +27,7 @@ app.use("/api/v1/mentor", mentorRoutes);
 app.use("/api/v1/mentee", menteeRoutes);
 app.use("/api/v1/meeting", meetingRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/google", googleMeetRoutes);
 
 
 

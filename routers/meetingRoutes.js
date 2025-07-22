@@ -7,6 +7,7 @@ router.get("/getAllMeetings", meetingController.getAllMeetings);
 router.get("/getMeetingById/:id", meetingController.getMeetingById);
 router.put("/updateMeetingById/:id", meetingController.updateMeetingById);
 router.delete("/deleteMeetingById/:id", meetingController.deleteMeetingById);
+router.get("/getFilteredMeetings",meetingController.getMeetings);
 
 module.exports = router;
 

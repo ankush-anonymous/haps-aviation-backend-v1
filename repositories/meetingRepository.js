@@ -51,6 +51,31 @@ const meetingRepository = {
       throw error;
     }
   },
+  
+  findMeetings: async ({ mentorId, menteeId }) => {
+    let query = "SELECT * FROM meeting_dtls";
+    const values = [];
+    const conditions = [];
+
+    if (mentorId) {
+      values.push(mentorId);
+      conditions.push(`mentor_id = $${values.length}`);
+    }
+
+    if (menteeId) {
+      values.push(menteeId);
+      conditions.push(`mentee_id = $${values.length}`);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(" AND ")}`;
+    }
+
+    query += " ORDER BY scheduled_datetime DESC";
+
+    const result = await pool.query(query, values);
+    return result.rows;
+  },
 
   updateMeetingById: async (id, data) => {
     try {
