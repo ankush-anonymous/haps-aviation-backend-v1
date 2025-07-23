@@ -1,27 +1,69 @@
-const {pool} = require('../db/connect'); // assuming you use `pg` pool
 
-exports.saveGoogleTokens = async (userEmail, tokens) => {
-  const { access_token, refresh_token, scope, token_type, expiry_date } = tokens;
+const { pool } = require("../db/connect");
 
-  await pool.query(
-    `
-    INSERT INTO google_tokens (user_email, access_token, refresh_token, scope, token_type, expiry_date)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT (user_email) DO UPDATE
-    SET access_token = EXCLUDED.access_token,
-        refresh_token = EXCLUDED.refresh_token,
-        scope = EXCLUDED.scope,
-        token_type = EXCLUDED.token_type,
-        expiry_date = EXCLUDED.expiry_date
-    `,
-    [userEmail, access_token, refresh_token, scope, token_type, expiry_date]
-  );
+const saveToken = async ({ mentor_email, access_token, refresh_token, scope, token_type, expiry_date }) => {
+    const query = `
+        INSERT INTO google_tokens (mentor_email, access_token, refresh_token, scope, token_type, expiry_date)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *;
+    `;
+    const values = [mentor_email, access_token, refresh_token, scope, token_type, expiry_date];
+    try {
+        const result = await pool.query(query, values);
+        console.log(`Token saved for ${mentor_email}`);
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error saving Google token:', error);
+        throw error;
+    }
 };
 
-exports.getGoogleTokens = async (userEmail) => {
-  const result = await pool.query(
-    'SELECT * FROM google_tokens WHERE user_email = $1',
-    [userEmail]
-  );
-  return result.rows[0];
+
+const updateToken = async ({ mentor_email, access_token, refresh_token, scope, token_type, expiry_date }) => {
+    const query = `
+        UPDATE google_tokens
+        SET
+            access_token = $2,
+            refresh_token = $3,
+            scope = $4,
+            token_type = $5,
+            expiry_date = $6,
+            updated_at = NOW()
+        WHERE mentor_email = $1
+        RETURNING *;
+    `;
+    const values = [mentor_email, access_token, refresh_token, scope, token_type, expiry_date];
+    try {
+        const result = await pool.query(query, values);
+        if (result.rows.length === 0) {
+            console.warn(`No token found to update for ${mentor_email}`);
+            return null;
+        }
+        console.log(`Token updated for ${mentor_email}`);
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error updating Google token:', error);
+        throw error;
+    }
 };
+
+const getTokenByEmail = async (mentor_email) => {
+    const query = `
+        SELECT * FROM google_tokens
+        WHERE mentor_email = $1;
+    `;
+    try {
+        const result = await pool.query(query, [mentor_email]);
+        return result.rows[0] || null;
+    } catch (error) {
+        console.error(`Error fetching Google token for ${mentor_email}:`, error);
+        throw error;
+    }
+};
+
+module.exports = {
+    saveToken,
+    updateToken,
+    getTokenByEmail,
+};
+

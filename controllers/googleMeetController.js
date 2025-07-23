@@ -1,127 +1,66 @@
-const { google } = require('googleapis');
-const { saveGoogleTokens, getGoogleTokens } = require('../repositories/googleMeetRepository');
-const {  getAuthUrl } = require('../service/googleClient');
+const { google } = require('googleapis'); // Google API client library
+const googleTokenRepository = require('../repositories/googleMeetRepository'); // Our database repository
+require('dotenv').config();
 
 
-
-let savedTokens = null; // For demo — replace with DB storage in production
-
-// Step 1: Redirect to Google Auth
-exports.authGoogle = (req, res) => {
-  const url = getAuthUrl();
-  res.redirect(url);
-};
-
-// Step 2: Handle OAuth callback
-
-// exports.handleOAuthCallback = async (req, res) => {
-//   try {
-//     const { code } = req.query;
-//     const { tokens } = await oauth2Client.getToken(code);
-//     oauth2Client.setCredentials(tokens);
-
-//     const userInfo = await google.oauth2('v2').userinfo.get({ auth: oauth2Client });
-//     const userEmail = userInfo.data.email;
-
-//     // 🔐 Save to DB
-//     await saveGoogleTokens(userEmail, tokens);
-
-//     res.send('Authorization successful. You can now create Google Meet links.');
-//   } catch (error) {
-//     console.error('OAuth error:', error);
-//     res.status(500).send('Authentication failed.');
-//   }
-// };
-
+// Initialize Google OAuth2 client with credentials from environment variables.
+// These credentials should be obtained from your Google Cloud Project.
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
 );
 
-exports.handleOAuthCallback = async (req, res) => {
+/**
+ * Initiates the Google OAuth authentication process.
+ * Redirects the user to Google's consent screen to grant permissions.
+ */
+// Step 1: Redirect user to Google's consent screen
+const googleAuth = (req, res) => {
+  const scopes = [
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/userinfo.email',
+  ];
+
+  const authorizationUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: scopes,
+    prompt: 'consent',  
+  });
+
+  res.redirect(authorizationUrl);
+};
+
+/**
+ * Handles the callback from Google after the user grants/denies permissions.
+ * Exchanges the authorization code for access and refresh tokens,
+ * fetches user profile, and saves/updates tokens in the database.
+ */
+const googleAuthCallback = async (req, res) => {
+  const code = req.query.code;
+
   try {
-    const { code } = req.query;
-    console.log("OAuth Code received:", code);
-
+    // Get access token
     const { tokens } = await oauth2Client.getToken(code);
-    console.log("Tokens received:", tokens);
-
     oauth2Client.setCredentials(tokens);
 
-    // Now fetch user info with access token
-    const userInfoResponse = await google.oauth2('v2').userinfo.get({
-      auth: oauth2Client,
-    });
+    // Fetch user info
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfoResponse = await oauth2.userinfo.get();
 
-    const userEmail = userInfoResponse.data.email;
-    console.log("User info:", userInfoResponse.data);
+    const email = userInfoResponse.data.email;
+    const name = userInfoResponse.data.name;
+    const picture = userInfoResponse.data.picture;
 
-    await saveGoogleTokens(userEmail, tokens);
-
-    res.send('Authorization successful. You can now create Google Meet links.');
+    // Redirect to frontend with email (and other optional info)
+    res.redirect(`${process.env.FRONTEND_URL}/onboard/mentor?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}&picture=${encodeURIComponent(picture)}`);
   } catch (error) {
-    console.error('OAuth error:', error?.response?.data || error);
+    console.error('OAuth callback error:', error);
     res.status(500).send('Authentication failed.');
   }
 };
 
-
-
-// Step 3: Create Google Meet link
-exports.createMeeting = async (req, res) => {
-  try {
-    const { userEmail, startDateTime, endDateTime, summary, attendees } = req.body;
-
-    const tokens = await getGoogleTokens(userEmail);
-    if (!tokens) return res.status(401).json({ error: 'User not authenticated' });
-
-    oauth2Client.setCredentials({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expiry_date: tokens.expiry_date,
-      scope: tokens.scope,
-      token_type: tokens.token_type
-    });
-
-    // 🔄 Check for expiry
-    if (Date.now() >= Number(tokens.expiry_date)) {
-      const { credentials } = await oauth2Client.refreshAccessToken();
-      oauth2Client.setCredentials(credentials);
-      await saveGoogleTokens(userEmail, credentials); // update refreshed tokens
-    }
-
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-    const response = await calendar.events.insert({
-      calendarId: 'primary',
-      conferenceDataVersion: 1,
-      requestBody: {
-        summary,
-        description: 'Scheduled via MentorApp',
-        start: {
-          dateTime: startDateTime,
-          timeZone: 'Asia/Kolkata',
-        },
-        end: {
-          dateTime: endDateTime,
-          timeZone: 'Asia/Kolkata',
-        },
-        attendees: attendees.map(email => ({ email })),
-         sendUpdates: 'all',
-        conferenceData: {
-          createRequest: {
-            requestId: `meet_${Date.now()}`,
-            conferenceSolutionKey: { type: 'hangoutsMeet' },
-          },
-        },
-      },
-    });
-
-    const meetLink = response.data.hangoutLink;
-    return res.status(200).json({ meetLink });
-  } catch (error) {
-    console.error('Failed to create meeting:', error);
-    res.status(500).json({ error: 'Meeting creation failed' });
-  }
+module.exports = {
+    googleAuth,
+    googleAuthCallback,
 };
