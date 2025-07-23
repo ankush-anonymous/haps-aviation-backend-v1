@@ -6,7 +6,7 @@ const { googleAuth, googleAuthCallback } = require('../controllers/googleMeetCon
 
 
 
-router.get('/google', googleAuth);
+router.get('/auth', googleAuth);
 router.get("/oauth2callback", googleAuthCallback);
 
 module.exports = router;

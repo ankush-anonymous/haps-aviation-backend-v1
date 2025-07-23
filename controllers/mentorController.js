@@ -5,12 +5,12 @@ const { validateMentorPayload } = require("../validators/mentorValidator");
 const mentorsController = {
    loginMentor: async (req, res) => {
     try {
-      const { phone_number } = req.body;
-      if (!phone_number) {
-        return res.status(400).json({ error: "Phone number is required" });
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
       }
 
-      const mentor = await mentorsRepository.loginMentorByPhone(phone_number);
+      const mentor = await mentorsRepository.loginMentorByPhone(email);
 
       if (!mentor) {
         return res.status(404).json({ error: "Mentor not found" });

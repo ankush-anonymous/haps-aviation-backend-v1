@@ -3,6 +3,7 @@ const googleTokenRepository = require('../repositories/googleMeetRepository'); /
 require('dotenv').config();
 
 
+
 // Initialize Google OAuth2 client with credentials from environment variables.
 // These credentials should be obtained from your Google Cloud Project.
 const oauth2Client = new google.auth.OAuth2(
@@ -22,29 +23,33 @@ const googleAuth = (req, res) => {
     'https://www.googleapis.com/auth/userinfo.email',
   ];
 
+  const flow = req.query.flow || 'login'; // default to login if not provided
+
   const authorizationUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    prompt: 'consent',  
+    prompt: 'consent',
+    state: flow, // ⬅️ capture flow and send as state
   });
 
   res.redirect(authorizationUrl);
 };
+
 
 /**
  * Handles the callback from Google after the user grants/denies permissions.
  * Exchanges the authorization code for access and refresh tokens,
  * fetches user profile, and saves/updates tokens in the database.
  */
+
 const googleAuthCallback = async (req, res) => {
   const code = req.query.code;
+  const flow = req.query.state || 'login';
 
   try {
-    // Get access token
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    // Fetch user info
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfoResponse = await oauth2.userinfo.get();
 
@@ -52,13 +57,39 @@ const googleAuthCallback = async (req, res) => {
     const name = userInfoResponse.data.name;
     const picture = userInfoResponse.data.picture;
 
-    // Redirect to frontend with email (and other optional info)
-    res.redirect(`${process.env.FRONTEND_URL}/onboard/mentor?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}&picture=${encodeURIComponent(picture)}`);
+    // Extract token info
+    const tokenData = {
+      mentor_email: email,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      scope: tokens.scope,
+      token_type: tokens.token_type,
+      expiry_date: tokens.expiry_date,
+    };
+
+    // Try to update existing token, if not found, save new
+    const existing = await googleTokenRepository.getTokenByEmail(email);
+    if (existing) {
+      await googleTokenRepository.updateToken(tokenData);
+    } else {
+      await googleTokenRepository.saveToken(tokenData);
+    }
+
+    // Redirect based on flow
+    if (flow === 'signup') {
+      res.redirect(`${process.env.FRONTEND_URL}/onboard/mentor?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}&picture=${encodeURIComponent(picture)}&flow=${flow}`);
+    } else {
+      res.redirect(`${process.env.FRONTEND_URL}/mentor/login?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}&picture=${encodeURIComponent(picture)}&flow=${flow}`);
+    }
+
   } catch (error) {
     console.error('OAuth callback error:', error);
     res.status(500).send('Authentication failed.');
   }
 };
+
+
+
 
 module.exports = {
     googleAuth,

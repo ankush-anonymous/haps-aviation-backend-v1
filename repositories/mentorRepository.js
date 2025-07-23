@@ -1,9 +1,9 @@
 const { pool } = require("../db/connect");
 
 const mentorsRepository = {
-    loginMentorByPhone: async (phone_number) => {
+    loginMentorByPhone: async (email) => {
     try {
-      const result = await pool.query("SELECT * FROM mentors WHERE phone_number = $1", [phone_number]);
+      const result = await pool.query("SELECT * FROM mentors WHERE email = $1", [email]);
       return result.rows[0];
     } catch (error) {
       console.error("repository failed: loginMentorByPhone", error);
